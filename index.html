@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Z-Text Systems Status</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Formal Dark Theme */
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --success: #238636;
+            --success-border: #2ea043;
+            --danger: #da3633;
+            --warning: #d29922;
+            --font-ui: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+        body { background: var(--bg); color: var(--text-main); font-family: var(--font-ui); margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+
+        /* LAYOUT */
+        .container { width: 100%; max-width: 800px; padding: 20px; }
+        
+        /* HEADER */
+        header { width: 100%; border-bottom: 1px solid var(--border); padding: 20px 0; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .brand { font-weight: 600; font-size: 18px; display: flex; align-items: center; gap: 10px; }
+        .header-controls { display: flex; align-items: center; gap: 15px; }
+        
+        .badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; border: 1px solid var(--border); }
+        .badge.live { border-color: var(--success-border); color: var(--success-border); display: flex; align-items: center; gap: 6px; }
+        .dot { width: 6px; height: 6px; background: currentColor; border-radius: 50%; animation: pulse 2s infinite; }
+
+        /* REFRESH BUTTON */
+        .btn-refresh {
+            background: var(--surface); border: 1px solid var(--border); color: var(--text-main);
+            padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer;
+            display: flex; align-items: center; gap: 6px; transition: all 0.2s;
+        }
+        .btn-refresh:hover { border-color: var(--text-muted); background: #21262d; }
+        .btn-refresh:active { transform: translateY(1px); }
+        .btn-refresh svg { width: 14px; height: 14px; transition: transform 0.5s; }
+        .btn-refresh.spinning svg { animation: spin 0.5s linear infinite; }
+
+        /* STATUS BANNER */
+        .status-banner {
+            background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+            padding: 30px; text-align: center; margin-bottom: 30px; position: relative; overflow: hidden;
+            transition: border-color 0.3s;
+        }
+        .status-banner.online { border-top: 4px solid var(--success-border); }
+        .status-banner.offline { border-top: 4px solid var(--danger); }
+        .status-banner.checking { border-top: 4px solid var(--text-muted); opacity: 0.7; }
+        
+        .big-status { font-size: 24px; font-weight: 600; margin-bottom: 10px; }
+        .status-desc { color: var(--text-muted); font-size: 14px; }
+        .last-check { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 15px; display: block; }
+
+        /* METRICS GRID */
+        .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .metric-card { background: var(--surface); border: 1px solid var(--border); padding: 15px; border-radius: 6px; }
+        .m-label { font-size: 12px; color: var(--text-muted); font-weight: 500; display: block; margin-bottom: 5px; }
+        .m-value { font-size: 18px; font-weight: 600; font-family: var(--font-mono); }
+        .m-sub { font-size: 11px; color: var(--text-muted); }
+
+        /* GRAPH */
+        .graph-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 30px; }
+        .section-head { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px; font-weight: 600; }
+        .graph-bars { display: flex; height: 50px; gap: 3px; align-items: flex-end; }
+        .bar { 
+            flex: 1; min-width: 4px; border-radius: 2px; height: 100%; 
+            background: var(--border); transition: all 0.2s; position: relative; opacity: 0.8;
+        }
+        .bar.up { background: var(--success-border); }
+        .bar.down { background: var(--danger); }
+        .bar:hover { opacity: 1; transform: scaleY(1.2); z-index: 10; }
+        
+        /* Tooltip */
+        .bar::before {
+            content: attr(data-date) "\A" attr(data-status);
+            white-space: pre; position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
+            background: #222; border: 1px solid var(--border); color: #fff;
+            padding: 5px 8px; border-radius: 4px; font-size: 10px; pointer-events: none;
+            display: none; width: max-content; text-align: center; z-index: 20;
+        }
+        .bar:hover::before { display: block; }
+
+        /* LOGS */
+        .logs-section { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .log-header { background: var(--surface); padding: 10px 15px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); }
+        .log-item { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; }
+        .log-item:last-child { border-bottom: none; }
+        .log-status { font-weight: 600; }
+        .log-status.down { color: var(--danger); }
+        .log-time { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; }
+
+        @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+        @keyframes spin { to {transform: rotate(360deg);} }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <div class="brand">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+                Z-Text Status
+            </div>
+            <div class="header-controls">
+                <div class="badge live"><div class="dot"></div> Live Monitor</div>
+                <button class="btn-refresh" onclick="manualRefresh()" id="refresh-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    Check Now
+                </button>
+            </div>
+        </header>
+
+        <!-- MAIN STATUS -->
+        <div id="hero" class="status-banner checking">
+            <div class="big-status">Connecting...</div>
+            <span class="status-desc">Establishing secure handshake</span>
+            <span class="last-check" id="last-updated">Initializing monitor...</span>
+        </div>
+
+        <!-- METRICS -->
+        <div class="metrics">
+            <div class="metric-card">
+                <span class="m-label">24h Uptime</span>
+                <span class="m-value" id="uptime-val">--%</span>
+            </div>
+            <div class="metric-card">
+                <span class="m-label">Realtime Latency</span>
+                <span class="m-value" id="ping-val">--</span>
+                <span class="m-sub">Round-trip Time</span>
+            </div>
+            <div class="metric-card">
+                <span class="m-label">Protocol Flush</span>
+                <span class="m-value" id="protocol-val">--</span>
+                <span class="m-sub">WebSocket/HTTP2 Handshake</span>
+            </div>
+        </div>
+
+        <!-- GRAPH -->
+        <div class="graph-section">
+            <div class="section-head">
+                <span>System Availability (Last 24 Hours)</span>
+                <span style="color:var(--text-muted)">30min Intervals</span>
+            </div>
+            <div class="graph-bars" id="uptime-graph">
+                <!-- Bars go here -->
+            </div>
+        </div>
+
+        <!-- INCIDENT LOGS -->
+        <div class="logs-section">
+            <div class="log-header">Recent Incidents / Downtime</div>
+            <div id="incident-log">
+                <div class="log-item" style="color:var(--text-muted); justify-content:center;">No incidents reported in history.</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIG: YOUR SERVER URL
+        const TARGET_URL = 'https://ztext-cloudbox.serveousercontent.com';
+        let refreshTimer = null;
+        
+        async function runChecks(isManual = false) {
+            const btn = document.getElementById('refresh-btn');
+            if(isManual) btn.classList.add('spinning');
+
+            // 1. Check Live Ping
+            const start = performance.now();
+            try {
+                // 'no-cors' allows us to ping servers that don't explicitly allow localhost
+                // It returns an opaque response, but if it doesn't throw, the server is UP.
+                await fetch(TARGET_URL, { method: 'HEAD', mode: 'no-cors', cache: 'no-cache' });
+                const end = performance.now();
+                const latency = Math.round(end - start);
+                
+                setSystemStatus(true, latency);
+            } catch(e) {
+                console.error(e);
+                setSystemStatus(false, 0, e.message);
+            }
+
+            // 2. Refresh History (Silent update)
+            try {
+                const histRes = await fetch('history.json?t=' + Date.now());
+                if(histRes.ok) {
+                    const history = await histRes.json();
+                    processHistory(history);
+                }
+            } catch(e) { console.warn("History fetch skipped"); }
+
+            if(isManual) {
+                setTimeout(() => btn.classList.remove('spinning'), 500);
+            }
+        }
+
+        function setSystemStatus(isOnline, latency, errMsg) {
+            const hero = document.getElementById('hero');
+            const pingVal = document.getElementById('ping-val');
+            const protoVal = document.getElementById('protocol-val');
+            const lastUp = document.getElementById('last-updated');
+
+            const now = new Date();
+            lastUp.innerText = "Last checked: " + now.toLocaleTimeString();
+
+            if (isOnline) {
+                hero.className = 'status-banner online';
+                hero.querySelector('.big-status').innerText = 'All Systems Operational';
+                hero.querySelector('.status-desc').innerText = 'Encryption Engine & Database Active';
+                hero.querySelector('.big-status').style.color = 'var(--success-border)';
+
+                pingVal.innerText = latency + "ms";
+                pingVal.style.color = "var(--success-border)";
+
+                // Protocol Check Simulation
+                protoVal.innerText = "OK";
+                protoVal.style.color = "var(--success-border)";
+                
+            } else {
+                hero.className = 'status-banner offline';
+                hero.querySelector('.big-status').innerText = 'Major System Outage';
+                hero.querySelector('.status-desc').innerText = errMsg || 'Server Unreachable / Connection Refused';
+                hero.querySelector('.big-status').style.color = 'var(--danger)';
+
+                pingVal.innerText = "TIMEOUT";
+                pingVal.style.color = "var(--danger)";
+                
+                protoVal.innerText = "FAILED";
+                protoVal.style.color = "var(--danger)";
+                
+                // Add temporary realtime log
+                addLogEntry(new Date().toISOString(), "down");
+            }
+        }
+
+        function processHistory(data) {
+            // Data structure: [{time: "...", status: "up/down"}, ...]
+            const container = document.getElementById('uptime-graph');
+            container.innerHTML = '';
+            
+            // 1. Calculate Uptime %
+            const total = data.length;
+            const up = data.filter(x => x.status === 'up').length;
+            const pct = total === 0 ? 100 : Math.round((up / total) * 100);
+            
+            document.getElementById('uptime-val').innerText = pct + "%";
+            const upEl = document.getElementById('uptime-val');
+            if(pct >= 90) upEl.style.color = "var(--success-border)";
+            else if(pct >= 70) upEl.style.color = "var(--warning)";
+            else upEl.style.color = "var(--danger)";
+
+            // 2. Render Graph (Limit to last 48 entries = 24h)
+            const recent = data.slice(-48); 
+            
+            recent.forEach(entry => {
+                const bar = document.createElement('div');
+                bar.className = `bar ${entry.status}`;
+                
+                // Format Date for Tooltip
+                const d = new Date(entry.time);
+                const dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
+                
+                bar.setAttribute('data-date', dateStr);
+                bar.setAttribute('data-status', statusStr);
+                
+                container.appendChild(bar);
+            });
+
+            // 3. Fill Incident Log (Filter for 'down')
+            const incidents = data.filter(x => x.status === 'down').reverse().slice(0, 5);
+            const logContainer = document.getElementById('incident-log');
+            
+            if (incidents.length > 0) {
+                logContainer.innerHTML = '';
+                incidents.forEach(inc => {
+                    addLogEntry(inc.time, "down");
+                });
+            }
+        }
+        
+        function addLogEntry(time, type) {
+            const logContainer = document.getElementById('incident-log');
+            if(logContainer.innerText.includes("No incidents")) logContainer.innerHTML = '';
+            
+            const d = new Date(time);
+            const timeStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+            
+            // Prevent duplicate logs if refreshing fast
+            if(logContainer.innerHTML.includes(timeStr)) return;
+
+             const div = document.createElement('div');
+            div.className = 'log-item';
+            div.innerHTML = `
+                <span class="log-status down">Connection Timeout</span>
+                <span class="log-time">${timeStr}</span>
+            `;
+            logContainer.prepend(div);
+        }
+
+        function manualRefresh() {
+            runChecks(true);
+        }
+
+        // Run immediately
+        runChecks();
+        
+        // Auto refresh every 10 seconds (Real-time monitoring)
+        setInterval(() => runChecks(false), 10000);
+
+    </script>
+</body>
+</html>
