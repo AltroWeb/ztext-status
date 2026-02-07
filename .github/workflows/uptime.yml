@@ -1,0 +1,54 @@
+name: Uptime Monitor
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: "*/30 * * * *"
+  workflow_dispatch: # Allows manual run button
+
+jobs:
+  check-server:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to save history.json
+      
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: Check Server Status
+        id: check
+        run: |
+          # REPLACE WITH YOUR URL
+          URL="https://ztext-cloudbox.serveousercontent.com"
+          
+          # Try to connect (max time 10s). If fail, it returns false.
+          if curl -s --head --request GET --connect-timeout 10 --max-time 10 "$URL" > /dev/null; then
+            echo "status=up" >> $GITHUB_OUTPUT
+            echo "Server is UP"
+          else
+            echo "status=down" >> $GITHUB_OUTPUT
+            echo "Server is DOWN"
+          fi
+
+      - name: Update History Log
+        run: |
+          # Read existing json, add new entry, keep last 100 items
+          STATUS="${{ steps.check.outputs.status }}"
+          TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          
+          # Create temporary file with new entry
+          echo "{\"time\": \"$TIME\", \"status\": \"$STATUS\"}" > new_entry.json
+          
+          # Merge
+          if [ ! -f history.json ]; then echo "[]" > history.json; fi
+          jq --slurpfile new new_entry.json '. + $new | .[-100:]' history.json > history_temp.json
+          mv history_temp.json history.json
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "Z-Text Bot"
+          git config --global user.email "bot@ztext.app"
+          git add history.json
+          git commit -m "Update status log: ${{ steps.check.outputs.status }}" || exit 0
+          git push
