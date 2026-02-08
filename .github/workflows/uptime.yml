@@ -16,19 +16,29 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Check Server Status
+      - name: Check Server Status (Strict HTTP Code)
         id: check
         run: |
           # REPLACE WITH YOUR URL
           URL="https://ztext-cloudbox.serveousercontent.com"
           
-          # Try to connect (max time 10s). If fail, it returns false.
-          if curl -s --head --request GET --connect-timeout 10 --max-time 10 "$URL" > /dev/null; then
+          # 1. -o /dev/null : Drop the html content
+          # 2. -s : Silent mode
+          # 3. -w "%{http_code}" : ONLY print the status code (e.g. 200, 404, 502)
+          # 4. --max-time 10 : Fail if it takes longer than 10s
+          
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL")
+          
+          echo "Server responded with HTTP Code: $HTTP_CODE"
+
+          # STRICT CHECK: Only 200 is acceptable.
+          # If you have redirects, use 301/302 as well, but usually 200 is the target.
+          if [ "$HTTP_CODE" -eq 200 ]; then
             echo "status=up" >> $GITHUB_OUTPUT
-            echo "Server is UP"
+            echo "Result: Server is UP (200 OK)"
           else
             echo "status=down" >> $GITHUB_OUTPUT
-            echo "Server is DOWN"
+            echo "Result: Server is DOWN (Code: $HTTP_CODE)"
           fi
 
       - name: Update History Log
@@ -40,8 +50,11 @@ jobs:
           # Create temporary file with new entry
           echo "{\"time\": \"$TIME\", \"status\": \"$STATUS\"}" > new_entry.json
           
-          # Merge
+          # Ensure history.json exists
           if [ ! -f history.json ]; then echo "[]" > history.json; fi
+          
+          # Merge using jq (Pre-installed on ubuntu-latest)
+          # Appends new entry, then slices to keep only the last 100
           jq --slurpfile new new_entry.json '. + $new | .[-100:]' history.json > history_temp.json
           mv history_temp.json history.json
 
@@ -49,6 +62,10 @@ jobs:
         run: |
           git config --global user.name "Z-Text Bot"
           git config --global user.email "bot@ztext.app"
+          
+          # Stash any weird changes just in case, pull latest to avoid conflicts
+          git pull --rebase --autostash
+          
           git add history.json
           git commit -m "Update status log: ${{ steps.check.outputs.status }}" || exit 0
           git push
