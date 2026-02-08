@@ -16,34 +16,52 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v3
 
-      - name: Check Server Status (Strict HTTP Code)
+      - name: Check Server Status (Node.js Pro)
         id: check
-        run: |
-          # REPLACE WITH YOUR URL
-          URL="https://ztext-cloudbox.serveousercontent.com"
-          
-          # 1. -o /dev/null : Drop the html content
-          # 2. -s : Silent mode
-          # 3. -w "%{http_code}" : ONLY print the status code (e.g. 200, 404, 502)
-          # 4. --max-time 10 : Fail if it takes longer than 10s
-          
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$URL")
-          
-          echo "Server responded with HTTP Code: $HTTP_CODE"
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // CONFIGURATION
+            const URL = "https://ztext-cloudbox.serveousercontent.com";
+            
+            console.log(`Pinging: ${URL}`);
+            
+            try {
+              // 1. Perform Request with Browser-like Headers
+              const response = await fetch(URL, {
+                method: 'GET',
+                headers: {
+                  // Crucial: Serveo blocks empty User-Agents. We look like Chrome.
+                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                  'Accept': 'application/json, text/html, */*'
+                },
+                redirect: 'follow', // Automatically follow HTTP -> HTTPS
+                signal: AbortSignal.timeout(10000) // 10s Timeout
+              });
 
-          # STRICT CHECK: Only 200 is acceptable.
-          # If you have redirects, use 301/302 as well, but usually 200 is the target.
-          if [ "$HTTP_CODE" -eq 200 ]; then
-            echo "status=up" >> $GITHUB_OUTPUT
-            echo "Result: Server is UP (200 OK)"
-          else
-            echo "status=down" >> $GITHUB_OUTPUT
-            echo "Result: Server is DOWN (Code: $HTTP_CODE)"
-          fi
+              console.log(`Response Code: ${response.status} (${response.statusText})`);
+
+              // 2. Determine Status (Accept 200-299 as UP)
+              if (response.ok) {
+                console.log("RESULT: UP");
+                core.setOutput('status', 'up');
+              } else {
+                console.log("RESULT: DOWN");
+                core.setOutput('status', 'down');
+                
+                // 3. Debug: Print the first 200 chars of the error page to see WHY
+                const text = await response.text();
+                console.log(`Server Reply: ${text.substring(0, 200)}...`);
+              }
+
+            } catch (error) {
+              console.log(`FATAL ERROR: ${error.message}`);
+              core.setOutput('status', 'down');
+            }
 
       - name: Update History Log
         run: |
-          # Read existing json, add new entry, keep last 100 items
+          # Read status from the Node script output
           STATUS="${{ steps.check.outputs.status }}"
           TIME=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           
@@ -53,8 +71,7 @@ jobs:
           # Ensure history.json exists
           if [ ! -f history.json ]; then echo "[]" > history.json; fi
           
-          # Merge using jq (Pre-installed on ubuntu-latest)
-          # Appends new entry, then slices to keep only the last 100
+          # Merge using jq (Appends new entry, keeps last 100)
           jq --slurpfile new new_entry.json '. + $new | .[-100:]' history.json > history_temp.json
           mv history_temp.json history.json
 
@@ -63,7 +80,7 @@ jobs:
           git config --global user.name "Z-Text Bot"
           git config --global user.email "bot@ztext.app"
           
-          # Stash any weird changes just in case, pull latest to avoid conflicts
+          # Stash local changes, pull remote to avoid conflicts
           git pull --rebase --autostash
           
           git add history.json
