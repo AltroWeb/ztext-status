@@ -71,9 +71,9 @@
         /* GRAPH */
         .graph-section { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 30px; }
         .section-head { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 13px; font-weight: 600; }
-        .graph-bars { display: flex; height: 50px; gap: 3px; align-items: flex-end; }
+        .graph-bars { display: flex; height: auto; gap: 3px; align-items: flex-end; flex-wrap: wrap; }
         .bar { 
-            flex: 1; min-width: 4px; border-radius: 2px; height: 100%; 
+            flex: 1; min-width: 4px; border-radius: 2px; height: 40px; 
             background: var(--border); transition: all 0.2s; position: relative; opacity: 0.8;
         }
         .bar.up { background: var(--success-border); }
