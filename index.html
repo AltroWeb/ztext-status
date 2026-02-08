@@ -139,9 +139,9 @@
                 <span class="m-sub">Round-trip Time</span>
             </div>
             <div class="metric-card">
-                <span class="m-label">Protocol Status</span>
+                <span class="m-label">Deep Protocol Check</span>
                 <span class="m-value" id="protocol-val">--</span>
-                <span class="m-sub">HTTP/Secure Handshake</span>
+                <span class="m-sub">Status Code Analysis</span>
             </div>
         </div>
 
@@ -158,7 +158,7 @@
 
         <!-- INCIDENT LOGS -->
         <div class="logs-section">
-            <div class="log-header">Recent Incidents / Downtime</div>
+            <div class="log-header">Recent Incidents (Live Feed)</div>
             <div id="incident-log">
                 <div class="log-item" style="color:var(--text-muted); justify-content:center;">No recent incidents reported.</div>
             </div>
@@ -172,79 +172,88 @@
         let isChecking = false; 
 
         async function runChecks(isManual = false) {
-            // Guard: Prevent stacking checks if server is slow
+            // Guard against overlap
             if (isChecking && !isManual) return;
             isChecking = true;
 
             const btn = document.getElementById('refresh-btn');
             if(isManual) {
                 btn.classList.add('spinning');
-                // Visual Feedback
                 const hero = document.getElementById('hero');
                 hero.className = 'status-banner checking';
-                hero.querySelector('.big-status').innerText = 'Pinging System...';
-                hero.querySelector('.status-desc').innerText = 'Verifying network availability...';
+                hero.querySelector('.big-status').innerText = 'Checking...';
+                hero.querySelector('.status-desc').innerText = 'Verifying HTTP Status Codes...';
             }
 
-            // --- STRICT MONITORING START ---
             const start = performance.now();
             
-            // 1. Setup AbortController for Strict 10s Timeout
+            // --- STRICT REAL-TIME FETCH ---
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10.0 Seconds Limit
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s Strict Timeout
 
             try {
-                // 2. Perform Request (GET is more accurate than HEAD for tunnels)
-                // mode: 'no-cors' is required for cross-origin status pages, but we rely on the
-                // fact that if the server is DOWN, this fetch will THROW (NetworkError).
-                await fetch(TARGET_URL, { 
-                    method: 'GET', 
-                    mode: 'no-cors', 
+                // REAL FETCH: 'cors' mode ensures we read the actual status code (502 vs 200)
+                // 'no-store' ensures we don't read from browser cache
+                const response = await fetch(TARGET_URL + '?t=' + Date.now(), { 
+                    method: 'GET',
+                    mode: 'cors', // REQUIRED for reading 502/404 errors accurately
                     cache: 'no-store',
+                    credentials: 'omit',
                     signal: controller.signal 
                 });
-
-                // If we reach here, server is reachable (even if 404/500, it's 'alive')
+                
                 clearTimeout(timeoutId);
-                const latency = Math.round(performance.now() - start);
-                
-                setSystemStatus(true, latency);
 
-            } catch(e) {
-                clearTimeout(timeoutId); // Stop the timer
-                
-                // 3. Error Fingerprinting
-                let publicErrorMsg = "Service Unreachable";
-                let logErrorType = "Connection Refused";
-
-                if (e.name === 'AbortError') {
-                    // This means it took > 10 seconds
-                    publicErrorMsg = "Connection Timed Out (>10s)";
-                    logErrorType = "Timeout / High Latency";
-                } else if (e.message.includes("Failed to fetch")) {
-                    // This means DNS fail or Connection Refused
-                    publicErrorMsg = "Connection Refused / Network Error";
-                    logErrorType = "Connection Refused";
+                if (response.ok) {
+                    // HTTP 200-299: Success
+                    const latency = Math.round(performance.now() - start);
+                    setSystemStatus(true, latency, null, "HTTP 200 OK");
+                } else {
+                    // HTTP 4xx, 5xx: Failure (The 502/503 will be caught here)
+                    throw new Error(`HTTP Error ${response.status} ${response.statusText}`);
                 }
 
-                console.error("Monitor Check Failed:", e);
-                setSystemStatus(false, 0, publicErrorMsg, logErrorType);
+            } catch(e) {
+                clearTimeout(timeoutId);
+                handleError(e);
             } finally {
                 isChecking = false;
                 if(isManual) setTimeout(() => btn.classList.remove('spinning'), 500);
             }
-            // --- STRICT MONITORING END ---
 
-            // 4. Background History Sync
+            // Background History Sync
             try {
                 const histRes = await fetch('history.json?t=' + Date.now());
-                if(histRes.ok) {
-                    processHistory(await histRes.json());
-                }
-            } catch(e) { console.warn("History skipped"); }
+                if(histRes.ok) processHistory(await histRes.json());
+            } catch(e) {}
         }
 
-        function setSystemStatus(isOnline, latency, errorMsg, logType) {
+        function handleError(e) {
+            let errorMsg = "Service Unavailable";
+            let logType = "Unknown Error";
+
+            if (e.name === 'AbortError') {
+                errorMsg = "Connection Timed Out (>10s)";
+                logType = "Timeout";
+            } else if (e.message.includes("HTTP Error")) {
+                // Catches 502, 503, 404, 500
+                errorMsg = e.message; 
+                logType = e.message; // e.g., "HTTP Error 502 Bad Gateway"
+            } else if (e.message.includes("Failed to fetch")) {
+                // Catches DNS failure, Connection Refused, OR CORS failure
+                errorMsg = "Connection Refused / Network Error";
+                logType = "Connection Refused";
+            } else {
+                errorMsg = e.message;
+                logType = "System Error";
+            }
+
+            console.error("Monitor Error:", e);
+            // We pass 'logType' as the 4th argument (protoStatus)
+            setSystemStatus(false, 0, errorMsg, logType);
+        }
+
+        function setSystemStatus(isOnline, latency, errorMsg, protoStatus) {
             const hero = document.getElementById('hero');
             const pingVal = document.getElementById('ping-val');
             const protoVal = document.getElementById('protocol-val');
@@ -262,12 +271,12 @@
                 pingVal.innerText = latency + "ms";
                 pingVal.style.color = "var(--success-border)";
 
-                protoVal.innerText = "ACTIVE";
+                protoVal.innerText = protoStatus;
                 protoVal.style.color = "var(--success-border)";
             } else {
                 hero.className = 'status-banner offline';
                 hero.querySelector('.big-status').innerText = 'System Outage Detected';
-                hero.querySelector('.status-desc').innerText = errorMsg; // Precise Error
+                hero.querySelector('.status-desc').innerText = errorMsg; 
                 hero.querySelector('.big-status').style.color = 'var(--danger)';
 
                 pingVal.innerText = "TIMEOUT";
@@ -276,8 +285,8 @@
                 protoVal.innerText = "FAILED";
                 protoVal.style.color = "var(--danger)";
                 
-                // Log the precise error immediately
-                addLogEntry(now.toISOString(), logType);
+                // FIXED: Use 'protoStatus' (the 4th argument) which holds the logType string
+                addLogEntry(now.toISOString(), protoStatus); 
             }
         }
 
@@ -285,7 +294,6 @@
             const container = document.getElementById('uptime-graph');
             container.innerHTML = '';
             
-            // Uptime Math
             const total = data.length;
             const up = data.filter(x => x.status === 'up').length;
             const pct = total === 0 ? 100 : Math.round((up / total) * 100);
@@ -296,26 +304,23 @@
             else if(pct >= 70) upEl.style.color = "var(--warning)";
             else upEl.style.color = "var(--danger)";
 
-            // Draw Graph (Last 24h)
+            // Draw Graph (Last 24h = 48 entries)
             data.slice(-48).forEach(entry => {
                 const bar = document.createElement('div');
                 bar.className = `bar ${entry.status}`;
-                
                 const d = new Date(entry.time);
                 const dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
-                
                 bar.setAttribute('data-date', dateStr);
                 bar.setAttribute('data-status', statusStr);
                 container.appendChild(bar);
             });
 
-            // Sync Log from History (Only if we haven't already logged live errors)
-            // Fix: No reverse needed here because we prepend OLD -> NEW to get NEW at top
+            // Sync Log from History (Last 5 items only from history)
             const incidents = data.filter(x => x.status === 'down').slice(-5);
             const logContainer = document.getElementById('incident-log');
             
-            // Only fill from history if empty (Live errors take precedence)
+            // Only overwrite if it's the default "No recent incidents" message
             if (logContainer.innerText.includes("No recent incidents") && incidents.length > 0) {
                 logContainer.innerHTML = '';
                 incidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
@@ -329,24 +334,29 @@
             const d = new Date(time);
             const timeStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
             
-            // De-duplication: Don't show same error minute twice
+            // De-duplication check
             if(logContainer.innerHTML.includes(timeStr)) return;
 
-             const div = document.createElement('div');
+            const div = document.createElement('div');
             div.className = 'log-item';
             div.innerHTML = `
                 <span class="log-status down">${msg}</span>
                 <span class="log-time">${timeStr}</span>
             `;
-            // PREPEND puts the newest item (last in the loop) at the TOP of the list
             logContainer.prepend(div);
+            
+            // LIMITER: Keep only the last 10 logs
+            while (logContainer.children.length > 10) {
+                logContainer.removeChild(logContainer.lastChild);
+            }
         }
 
         function manualRefresh() { runChecks(true); }
-
-        // Start
+        
+        // Start immediately
         runChecks();
-        // Check every 10 seconds (High Accuracy)
+        
+        // Auto refresh every 10 seconds
         setInterval(() => runChecks(false), 10000);
 
     </script>
