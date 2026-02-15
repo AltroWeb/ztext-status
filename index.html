@@ -130,7 +130,7 @@
         <!-- METRICS -->
         <div class="metrics">
             <div class="metric-card">
-                <span class="m-label">24h Uptime</span>
+                <span class="m-label">Average Uptime</span>
                 <span class="m-value" id="uptime-val">--%</span>
             </div>
             <div class="metric-card">
@@ -291,41 +291,38 @@
         }
 
         function processHistory(data) {
-            const container = document.getElementById('uptime-graph');
-            container.innerHTML = '';
-            
-            const total = data.length;
-            const up = data.filter(x => x.status === 'up').length;
-            const pct = total === 0 ? 100 : Math.round((up / total) * 100);
-            
-            const upEl = document.getElementById('uptime-val');
-            upEl.innerText = pct + "%";
-            if(pct >= 90) upEl.style.color = "var(--success-border)";
-            else if(pct >= 70) upEl.style.color = "var(--warning)";
-            else upEl.style.color = "var(--danger)";
+    const container = document.getElementById('uptime-graph');
+    const upEl = document.getElementById('uptime-val');
+    const logContainer = document.getElementById('incident-log');
 
-            // Draw Graph (Last 24h = 48 entries)
-            data.slice(-48).forEach(entry => {
-                const bar = document.createElement('div');
-                bar.className = `bar ${entry.status}`;
-                const d = new Date(entry.time);
-                const dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
-                bar.setAttribute('data-date', dateStr);
-                bar.setAttribute('data-status', statusStr);
-                container.appendChild(bar);
-            });
+    // 1. Slice to the most recent 48 intervals (Last 24h)
+    const recentData = data.slice(-48);
+    const total = recentData.length;
+    
+    // 2. Calculate Uptime % based ONLY on those rendered bars
+    const upCount = recentData.filter(x => x.status === 'up').length;
+    const pct = total === 0 ? 100 : Math.round((upCount / total) * 100);
 
-            // Sync Log from History (Last 5 items only from history)
-            const incidents = data.filter(x => x.status === 'down').slice(-5);
-            const logContainer = document.getElementById('incident-log');
-            
-            // Only overwrite if it's the default "No recent incidents" message
-            if (logContainer.innerText.includes("No recent incidents") && incidents.length > 0) {
-                logContainer.innerHTML = '';
-                incidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
-            }
-        }
+    // 3. UI Update: Stats
+    upEl.innerText = `${pct}%`;
+    upEl.style.color = pct >= 90 ? "var(--success-border)" : (pct >= 70 ? "var(--warning)" : "var(--danger)");
+
+    // 4. UI Update: Render Graph
+    container.innerHTML = recentData.map(entry => {
+        const d = new Date(entry.time);
+        const dateStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+        const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
+        
+        return `<div class="bar ${entry.status}" data-date="${dateStr}" data-status="${statusStr}"></div>`;
+    }).join('');
+
+    // 5. UI Update: Sync Incident Logs (Last 5 failures from the recent window)
+    const recentIncidents = recentData.filter(x => x.status === 'down').slice(-5);
+    if (recentIncidents.length > 0) {
+        logContainer.innerHTML = '';
+        recentIncidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
+    }
+}
         
         function addLogEntry(time, msg) {
             const logContainer = document.getElementById('incident-log');
