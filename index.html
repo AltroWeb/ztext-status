@@ -350,7 +350,7 @@
 
             // --- PHASE 2: HISTORY FETCH ---
             try {
-                const histRes = await fetch(`${historyFile}?t=` + Date.now(), { signal: signal });
+                if (!isManual && document.getElementById('uptime-graph').children.length > 0) return; const histRes = await fetch(`${historyFile}?t=` + Date.now(), { signal: signal });
                 
                 if (checkId !== currentShardId) return; // Drop stale history
                 
