@@ -93,7 +93,7 @@
         /* LOGS */
         .logs-section { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
         .log-header { background: var(--surface); padding: 10px 15px; font-size: 13px; font-weight: 600; border-bottom: 1px solid var(--border); }
-        .log-item { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; }
+.log-item { padding: 12px 15px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 20px; font-size: 13px; }
         .log-item:last-child { border-bottom: none; }
         .log-status { font-weight: 600; }
         .log-status.down { color: var(--danger); }
@@ -101,12 +101,71 @@
 
         @keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
         @keyframes spin { to {transform: rotate(360deg);} }
+        
+        
+        
+        
+/* HEADER FIX - Revert to original spacing */
+        .header-controls { 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+        }
+
+        /* NEW CENTERED SHARD WRAPPER */
+        .shard-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 25px;
+            padding: 10px 16px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            width: fit-content;
+            margin-left: auto;
+            margin-right: auto;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        /* PRO SHARD SELECTOR */
+        .shard-select {
+            background: var(--bg);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 6px 30px 6px 12px; 
+            border-radius: 6px;
+            font-family: var(--font-ui);
+            font-size: 13px; 
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 10px center;
+            background-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .shard-select:hover, .shard-select:focus { 
+            border-color: var(--text-muted); 
+        }
+        
+        
+        
+        
+        
+        
     </style>
 </head>
 <body>
 
     <div class="container">
-        <header>
+<header>
             <div class="brand">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
                 Z-Text Status
@@ -120,11 +179,29 @@
             </div>
         </header>
 
-        <!-- MAIN STATUS -->
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div class="shard-wrapper" style="margin-bottom: 8px;">
+                <span style="color:var(--text-muted); font-size: 12px; font-weight: 500;">Database:</span>
+                <select id="shard-selector" class="shard-select" onchange="changeShard()">
+                    <option value="1">DB 01 (Primary)</option>
+                    <option value="2">DB 02</option>
+                </select>
+            </div>
+            
+        </div>
+
         <div id="hero" class="status-banner checking">
             <div class="big-status">Connecting...</div>
             <span class="status-desc">Establishing secure handshake</span>
+            
+            
             <span class="last-check" id="last-updated">Initializing monitor...</span>
+            
+            <br>
+            <div id="shard-url" style="font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); opacity: 0.6; letter-spacing: 0.5px;"></div>
+            
+            
+            
         </div>
 
         <!-- METRICS -->
@@ -166,91 +243,139 @@
     </div>
 
     <script>
-        // CONFIG: YOUR SERVER URL
-        const TARGET_URL = 'https://ztext-cloudbox.serveousercontent.com';
+// CONFIG: MAP YOUR SHARDS
+        const SHARDS = {
+            "1": "https://ztext-cloudbox.serveousercontent.com",
+            "2": "https://ztext-cloudbox-2.serveousercontent.com" // Update with actual URL
+        };
+
+        let currentShardId = localStorage.getItem('ztext_shard') || "1";
+        let isChecking = false;
         
-        let isChecking = false; 
+        // STRESS-TEST DEFENSE: Global controller to kill stale requests
+        let activeController = null; 
+
+        document.addEventListener("DOMContentLoaded", () => {
+            const selector = document.getElementById('shard-selector');
+            if (selector) selector.value = currentShardId;
+            
+            const urlDisplay = document.getElementById('shard-url');
+            if (urlDisplay) urlDisplay.innerText = SHARDS[currentShardId] || "Unknown URL";
+        });
+
+        function changeShard() {
+            const selector = document.getElementById('shard-selector');
+            if (!selector) return;
+            
+            currentShardId = selector.value;
+            localStorage.setItem('ztext_shard', currentShardId);
+            
+            const urlDisplay = document.getElementById('shard-url');
+            if (urlDisplay) urlDisplay.innerText = SHARDS[currentShardId];
+            
+            // Hard UI Reset to clear ghost data instantly
+            document.getElementById('uptime-graph').innerHTML = '';
+            document.getElementById('uptime-val').innerText = '--%';
+            document.getElementById('uptime-val').style.color = 'var(--text-main)';
+            document.getElementById('incident-log').innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">Fetching history...</div>';
+            
+            runChecks(true);
+        }
 
         async function runChecks(isManual = false) {
-            // Guard against overlap
-            if (isChecking && !isManual) return;
-            isChecking = true;
-
-            const btn = document.getElementById('refresh-btn');
-            if(isManual) {
-                btn.classList.add('spinning');
-                const hero = document.getElementById('hero');
-                hero.className = 'status-banner checking';
-                hero.querySelector('.big-status').innerText = 'Checking...';
-                hero.querySelector('.status-desc').innerText = 'Verifying HTTP Status Codes...';
+            // 1. KILL SWITCH: Abort any running requests from previous selections
+            if (activeController) {
+                activeController.abort("SWITCHED_SHARD");
             }
 
-            const start = performance.now();
-            
-            // --- STRICT REAL-TIME FETCH ---
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s Strict Timeout
+            isChecking = true;
+            const checkId = currentShardId; // Lock the ID for this specific run
+            const targetUrl = SHARDS[checkId];
+            const historyFile = `history_${checkId}.json`;
+            const btn = document.getElementById('refresh-btn');
 
+            if(isManual) {
+                if(btn) btn.classList.add('spinning');
+                const hero = document.getElementById('hero');
+                hero.className = 'status-banner checking';
+                hero.querySelector('.big-status').innerText = `Checking Shard ${checkId}...`;
+                hero.querySelector('.status-desc').innerText = 'Verifying HTTP Status Codes...';
+                hero.querySelector('.big-status').style.color = 'var(--text-main)';
+            }
+
+            // 2. Setup combined signal (10s Timeout + Manual Abort)
+            activeController = new AbortController();
+            const signal = activeController.signal;
+            const timeoutId = setTimeout(() => {
+                if(activeController) activeController.abort("TIMEOUT");
+            }, 10000);
+
+            const start = performance.now();
+
+            // --- PHASE 1: LIVE PING ---
             try {
-                // REAL FETCH: 'cors' mode ensures we read the actual status code (502 vs 200)
-                // 'no-store' ensures we don't read from browser cache
-                const response = await fetch(TARGET_URL + '?t=' + Date.now(), { 
-                    method: 'GET',
-                    mode: 'cors', // REQUIRED for reading 502/404 errors accurately
-                    cache: 'no-store',
-                    credentials: 'omit',
-                    signal: controller.signal 
+                const response = await fetch(targetUrl + '?t=' + Date.now(), { 
+                    method: 'GET', mode: 'cors', cache: 'no-store', credentials: 'omit', signal: signal 
                 });
                 
-                clearTimeout(timeoutId);
+                // RACE CONDITION CHECK: Drop result if user switched databases while waiting
+                if (checkId !== currentShardId) return;
 
                 if (response.ok) {
-                    // HTTP 200-299: Success
                     const latency = Math.round(performance.now() - start);
                     setSystemStatus(true, latency, null, "HTTP 200 OK");
                 } else {
-                    // HTTP 4xx, 5xx: Failure (The 502/503 will be caught here)
                     throw new Error(`HTTP Error ${response.status} ${response.statusText}`);
                 }
-
             } catch(e) {
-                clearTimeout(timeoutId);
-                handleError(e);
-            } finally {
-                isChecking = false;
-                if(isManual) setTimeout(() => btn.classList.remove('spinning'), 500);
+                if (checkId !== currentShardId) return; // Drop stale errors
+                
+                let errorMsg = "Service Unavailable";
+                let logType = "Unknown Error";
+
+                if (e === "TIMEOUT" || (e.name === 'AbortError' && e.message === "TIMEOUT")) {
+                    errorMsg = "Connection Timed Out (>10s)";
+                    logType = "Timeout";
+                } else if (e.name === 'AbortError') {
+                    return; // Ignore intentional aborts from switching shards
+                } else if (e.message && e.message.includes("HTTP Error")) {
+                    errorMsg = e.message; 
+                    logType = e.message;
+                } else {
+                    errorMsg = "Connection Refused / Network Error";
+                    logType = "Connection Refused";
+                }
+                setSystemStatus(false, 0, errorMsg, logType);
             }
 
-            // Background History Sync
+            // --- PHASE 2: HISTORY FETCH ---
             try {
-                const histRes = await fetch('history.json?t=' + Date.now());
-                if(histRes.ok) processHistory(await histRes.json());
-            } catch(e) {}
-        }
+                const histRes = await fetch(`${historyFile}?t=` + Date.now(), { signal: signal });
+                
+                if (checkId !== currentShardId) return; // Drop stale history
+                
+                if(histRes.ok) {
+                    const data = await histRes.json();
+                    processHistory(data);
+                } else {
+                    throw new Error("History missing");
+                }
+            } catch(e) {
+                if (checkId !== currentShardId) return; // Drop stale errors
 
-        function handleError(e) {
-            let errorMsg = "Service Unavailable";
-            let logType = "Unknown Error";
-
-            if (e.name === 'AbortError') {
-                errorMsg = "Connection Timed Out (>10s)";
-                logType = "Timeout";
-            } else if (e.message.includes("HTTP Error")) {
-                // Catches 502, 503, 404, 500
-                errorMsg = e.message; 
-                logType = e.message; // e.g., "HTTP Error 502 Bad Gateway"
-            } else if (e.message.includes("Failed to fetch")) {
-                // Catches DNS failure, Connection Refused, OR CORS failure
-                errorMsg = "Connection Refused / Network Error";
-                logType = "Connection Refused";
-            } else {
-                errorMsg = e.message;
-                logType = "System Error";
+                // INFINITE LOADING FIX: Hard clear the UI on failure
+                const logContainer = document.getElementById('incident-log');
+                logContainer.innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No historical data available yet.</div>';
+                
+                document.getElementById('uptime-graph').innerHTML = '<div style="width:100%; text-align:center; color:var(--text-muted); font-size: 11px; padding: 10px;">Graph data unavailable</div>';
+            } finally {
+                clearTimeout(timeoutId);
+                // Only stop spinning if we are still on the same database we started checking
+                if (checkId === currentShardId) {
+                    isChecking = false;
+                    if(isManual && btn) setTimeout(() => btn.classList.remove('spinning'), 500);
+                }
             }
-
-            console.error("Monitor Error:", e);
-            // We pass 'logType' as the 4th argument (protoStatus)
-            setSystemStatus(false, 0, errorMsg, logType);
         }
 
         function setSystemStatus(isOnline, latency, errorMsg, protoStatus) {
@@ -285,77 +410,70 @@
                 protoVal.innerText = "FAILED";
                 protoVal.style.color = "var(--danger)";
                 
-                // FIXED: Use 'protoStatus' (the 4th argument) which holds the logType string
                 addLogEntry(now.toISOString(), protoStatus); 
             }
         }
 
         function processHistory(data) {
-    const container = document.getElementById('uptime-graph');
-    const upEl = document.getElementById('uptime-val');
-    const logContainer = document.getElementById('incident-log');
+            if (!Array.isArray(data) || data.length === 0) return;
 
-    // 1. Slice to the most recent 48 intervals (Last 24h)
-    const recentData = data.slice(-48);
-    const total = recentData.length;
-    
-    // 2. Calculate Uptime % based ONLY on those rendered bars
-    const upCount = recentData.filter(x => x.status === 'up').length;
-    const pct = total === 0 ? 100 : Math.round((upCount / total) * 100);
+            const container = document.getElementById('uptime-graph');
+            const upEl = document.getElementById('uptime-val');
+            const logContainer = document.getElementById('incident-log');
 
-    // 3. UI Update: Stats
-    upEl.innerText = `${pct}%`;
-    upEl.style.color = pct >= 90 ? "var(--success-border)" : (pct >= 70 ? "var(--warning)" : "var(--danger)");
+            const recentData = data.slice(-48);
+            const total = recentData.length;
+            
+            const upCount = recentData.filter(x => x.status === 'up').length;
+            const pct = total === 0 ? 100 : Math.round((upCount / total) * 100);
 
-    // 4. UI Update: Render Graph
-    container.innerHTML = recentData.map(entry => {
-        const d = new Date(entry.time);
-        const dateStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-        const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
-        
-        return `<div class="bar ${entry.status}" data-date="${dateStr}" data-status="${statusStr}"></div>`;
-    }).join('');
+            upEl.innerText = `${pct}%`;
+            upEl.style.color = pct >= 90 ? "var(--success-border)" : (pct >= 70 ? "var(--warning)" : "var(--danger)");
 
-    // 5. UI Update: Sync Incident Logs (Last 5 failures from the recent window)
-    const recentIncidents = recentData.filter(x => x.status === 'down').slice(-5);
-    if (recentIncidents.length > 0) {
-        logContainer.innerHTML = '';
-        recentIncidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
-    }
-}
-        
+            container.innerHTML = recentData.map(entry => {
+                const d = new Date(entry.time);
+                const dateStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                const statusStr = entry.status === 'up' ? "Operational" : "Downtime Detected";
+                return `<div class="bar ${entry.status}" data-date="${dateStr}" data-status="${statusStr}"></div>`;
+            }).join('');
+
+            const recentIncidents = recentData.filter(x => x.status === 'down').slice(-5);
+            
+            
+            if (recentIncidents.length === 0) logContainer.innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No recent incidents reported.</div>';
+            
+            if (recentIncidents.length > 0) {
+                logContainer.innerHTML = '';
+                recentIncidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
+            }
+        }
+
         function addLogEntry(time, msg) {
             const logContainer = document.getElementById('incident-log');
-            if(logContainer.innerText.includes("No recent incidents")) logContainer.innerHTML = '';
+            if(logContainer.innerText.includes("No recent incidents") || logContainer.innerText.includes("No historical data") || logContainer.innerText.includes("Fetching history")) {
+                logContainer.innerHTML = '';
+            }
             
             const d = new Date(time);
             const timeStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
             
-            // De-duplication check
             if(logContainer.innerHTML.includes(timeStr)) return;
 
             const div = document.createElement('div');
             div.className = 'log-item';
-            div.innerHTML = `
-                <span class="log-status down">${msg}</span>
-                <span class="log-time">${timeStr}</span>
-            `;
+            div.innerHTML = `<span class="log-status down">${msg}</span><span class="log-time">${timeStr}</span>`;
             logContainer.prepend(div);
             
-            // LIMITER: Keep only the last 10 logs
             while (logContainer.children.length > 10) {
                 logContainer.removeChild(logContainer.lastChild);
             }
         }
 
         function manualRefresh() { runChecks(true); }
-        
+
         // Start immediately
         runChecks();
-        
-        // Auto refresh every 10 seconds
         setInterval(() => runChecks(false), 10000);
-
     </script>
 </body>
 </html>
