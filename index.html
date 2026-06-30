@@ -269,21 +269,20 @@
             if (urlDisplay) urlDisplay.innerText = SHARDS[currentShardId] || "Unknown URL";
         });
 
-        // SINGLE-INSTANCE SURGICAL TOOLTIP ENGINE
+        // SINGLE-INSTANCE ABSOLUTE SCROLL-AWARE TOOLTIP ENGINE
         function setupTooltipListeners() {
             const bars = document.querySelectorAll('#uptime-graph .bar');
             
-            // Setup or locate the single shared tooltip instance
             let tip = document.getElementById('dynamic-tooltip');
             if (!tip) {
                 tip = document.createElement('div');
                 tip.id = 'dynamic-tooltip';
-                tip.style.cssText = "position: fixed; background: #222; border: 1px solid var(--border); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 11px; font-family: var(--font-ui); pointer-events: none; z-index: 9999; white-space: pre; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none;";
+                // Enforced absolute positioning context
+                tip.style.cssText = "position: absolute; background: #222; border: 1px solid var(--border); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 11px; font-family: var(--font-ui); pointer-events: none; z-index: 9999; white-space: pre; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none;";
                 document.body.appendChild(tip);
             }
 
             bars.forEach(bar => {
-                // Wipe existing listeners to prevent leaks
                 bar.onmouseenter = null;
                 bar.onmouseleave = null;
 
@@ -296,19 +295,20 @@
                     const windowWidth = window.innerWidth;
                     const safePadding = 16; 
 
-                    // Perfect center geometry alignment
+                    // 1. Calculate base layout positions centered on the bar
                     let left = barRect.left + (barRect.width / 2) - (tipRect.width / 2);
                     let top = barRect.top - tipRect.height - 8;
 
-                    // Hard Stop Edge Intelligence
+                    // 2. HARD-STOP BOUNDARY ARITHMETIC (Before factoring in page scroll)
                     if (left < safePadding) {
                         left = safePadding;
                     } else if (left + tipRect.width > windowWidth - safePadding) {
                         left = windowWidth - tipRect.width - safePadding;
                     }
 
-                    tip.style.left = left + 'px';
-                    tip.style.top = top + 'px';
+                    // 3. SCROLL INTEGRATION ONSHORE (Translates layout numbers to absolute page tracking coordinates)
+                    tip.style.left = (left + window.scrollX) + 'px';
+                    tip.style.top = (top + window.scrollY) + 'px';
                 };
 
                 bar.onmouseleave = () => {
@@ -469,7 +469,6 @@
                 return `<div class="bar ${entry.status}" data-date="${dateStr}" data-status="${statusStr}"></div>`;
             }).join('');
 
-            // Fire tooltip bindings instantly when the graph elements render
             setupTooltipListeners();
 
             logContainer.parentElement.style.background = 'var(--surface)';
