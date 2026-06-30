@@ -81,13 +81,7 @@
         .bar:hover { opacity: 1; transform: scaleY(1.2); z-index: 10; }
         
         /* Tooltip */
-        .bar::before {
-            content: attr(data-date) "\A" attr(data-status);
-            white-space: pre; position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%);
-            background: #222; border: 1px solid var(--border); color: #fff;
-            padding: 5px 8px; border-radius: 4px; font-size: 10px; pointer-events: none;
-            display: none; width: max-content; text-align: center; z-index: 20;
-        }
+
         .bar:hover::before { display: block; }
 
         /* LOGS */
@@ -157,7 +151,21 @@
         
         
         
-        
+        /* Fixed Height & Scrollable Logs Feed */
+.logs-section { 
+    border: 1px solid var(--border); 
+    border-radius: 6px; 
+    overflow: hidden; 
+    background: var(--surface);
+}
+#incident-log {
+    max-height: 200px; 
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+#incident-log::-webkit-scrollbar { width: 6px; }
+#incident-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
         
         
     </style>
@@ -242,17 +250,15 @@
         </div>
     </div>
 
-    <script>
-// CONFIG: MAP YOUR SHARDS
+<script>
+        // CONFIG: MAP YOUR SHARDS
         const SHARDS = {
             "1": "https://ztext-cloudbox.serveousercontent.com",
-            "2": "https://ztext-cloudbox-2.serveousercontent.com" // Update with actual URL
+            "2": "https://ztext-cloudbox-2.serveousercontent.com"
         };
 
         let currentShardId = localStorage.getItem('ztext_shard') || "1";
         let isChecking = false;
-        
-        // STRESS-TEST DEFENSE: Global controller to kill stale requests
         let activeController = null; 
 
         document.addEventListener("DOMContentLoaded", () => {
@@ -263,17 +269,63 @@
             if (urlDisplay) urlDisplay.innerText = SHARDS[currentShardId] || "Unknown URL";
         });
 
+        // SINGLE-INSTANCE SURGICAL TOOLTIP ENGINE
+        function setupTooltipListeners() {
+            const bars = document.querySelectorAll('#uptime-graph .bar');
+            
+            // Setup or locate the single shared tooltip instance
+            let tip = document.getElementById('dynamic-tooltip');
+            if (!tip) {
+                tip = document.createElement('div');
+                tip.id = 'dynamic-tooltip';
+                tip.style.cssText = "position: fixed; background: #222; border: 1px solid var(--border); color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 11px; font-family: var(--font-ui); pointer-events: none; z-index: 9999; white-space: pre; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none;";
+                document.body.appendChild(tip);
+            }
+
+            bars.forEach(bar => {
+                // Wipe existing listeners to prevent leaks
+                bar.onmouseenter = null;
+                bar.onmouseleave = null;
+
+                bar.onmouseenter = () => {
+                    tip.innerText = `${bar.getAttribute('data-date')}\n${bar.getAttribute('data-status')}`;
+                    tip.style.display = 'block';
+
+                    const barRect = bar.getBoundingClientRect();
+                    const tipRect = tip.getBoundingClientRect();
+                    const windowWidth = window.innerWidth;
+                    const safePadding = 16; 
+
+                    // Perfect center geometry alignment
+                    let left = barRect.left + (barRect.width / 2) - (tipRect.width / 2);
+                    let top = barRect.top - tipRect.height - 8;
+
+                    // Hard Stop Edge Intelligence
+                    if (left < safePadding) {
+                        left = safePadding;
+                    } else if (left + tipRect.width > windowWidth - safePadding) {
+                        left = windowWidth - tipRect.width - safePadding;
+                    }
+
+                    tip.style.left = left + 'px';
+                    tip.style.top = top + 'px';
+                };
+
+                bar.onmouseleave = () => {
+                    tip.style.display = 'none';
+                };
+            });
+        }
+
         function changeShard() {
             const selector = document.getElementById('shard-selector');
             if (!selector) return;
-            
             currentShardId = selector.value;
             localStorage.setItem('ztext_shard', currentShardId);
             
             const urlDisplay = document.getElementById('shard-url');
             if (urlDisplay) urlDisplay.innerText = SHARDS[currentShardId];
             
-            // Hard UI Reset to clear ghost data instantly
             document.getElementById('uptime-graph').innerHTML = '';
             document.getElementById('uptime-val').innerText = '--%';
             document.getElementById('uptime-val').style.color = 'var(--text-main)';
@@ -283,13 +335,10 @@
         }
 
         async function runChecks(isManual = false) {
-            // 1. KILL SWITCH: Abort any running requests from previous selections
-            if (activeController) {
-                activeController.abort("SWITCHED_SHARD");
-            }
+            if (activeController) activeController.abort("SWITCHED_SHARD");
 
             isChecking = true;
-            const checkId = currentShardId; // Lock the ID for this specific run
+            const checkId = currentShardId;
             const targetUrl = SHARDS[checkId];
             const historyFile = `history_${checkId}.json`;
             const btn = document.getElementById('refresh-btn');
@@ -303,7 +352,6 @@
                 hero.querySelector('.big-status').style.color = 'var(--text-main)';
             }
 
-            // 2. Setup combined signal (10s Timeout + Manual Abort)
             activeController = new AbortController();
             const signal = activeController.signal;
             const timeoutId = setTimeout(() => {
@@ -312,13 +360,10 @@
 
             const start = performance.now();
 
-            // --- PHASE 1: LIVE PING ---
             try {
                 const response = await fetch(targetUrl + '?t=' + Date.now(), { 
                     method: 'GET', mode: 'cors', cache: 'no-store', credentials: 'omit', signal: signal 
                 });
-                
-                // RACE CONDITION CHECK: Drop result if user switched databases while waiting
                 if (checkId !== currentShardId) return;
 
                 if (response.ok) {
@@ -328,8 +373,7 @@
                     throw new Error(`HTTP Error ${response.status} ${response.statusText}`);
                 }
             } catch(e) {
-                if (checkId !== currentShardId) return; // Drop stale errors
-                
+                if (checkId !== currentShardId) return;
                 let errorMsg = "Service Unavailable";
                 let logType = "Unknown Error";
 
@@ -337,7 +381,7 @@
                     errorMsg = "Connection Timed Out (>10s)";
                     logType = "Timeout";
                 } else if (e.name === 'AbortError') {
-                    return; // Ignore intentional aborts from switching shards
+                    return;
                 } else if (e.message && e.message.includes("HTTP Error")) {
                     errorMsg = e.message; 
                     logType = e.message;
@@ -348,11 +392,10 @@
                 setSystemStatus(false, 0, errorMsg, logType);
             }
 
-            // --- PHASE 2: HISTORY FETCH ---
             try {
-                if (!isManual && document.getElementById('uptime-graph').children.length > 0) return; const histRes = await fetch(`${historyFile}?t=` + Date.now(), { signal: signal });
-                
-                if (checkId !== currentShardId) return; // Drop stale history
+                if (!isManual && document.getElementById('uptime-graph').children.length > 0) return; 
+                const histRes = await fetch(`${historyFile}?t=` + Date.now(), { signal: signal });
+                if (checkId !== currentShardId) return;
                 
                 if(histRes.ok) {
                     const data = await histRes.json();
@@ -361,16 +404,11 @@
                     throw new Error("History missing");
                 }
             } catch(e) {
-                if (checkId !== currentShardId) return; // Drop stale errors
-
-                // INFINITE LOADING FIX: Hard clear the UI on failure
-                const logContainer = document.getElementById('incident-log');
-                logContainer.innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No historical data available yet.</div>';
-                
+                if (checkId !== currentShardId) return;
+                document.getElementById('incident-log').innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No historical data available yet.</div>';
                 document.getElementById('uptime-graph').innerHTML = '<div style="width:100%; text-align:center; color:var(--text-muted); font-size: 11px; padding: 10px;">Graph data unavailable</div>';
             } finally {
                 clearTimeout(timeoutId);
-                // Only stop spinning if we are still on the same database we started checking
                 if (checkId === currentShardId) {
                     isChecking = false;
                     if(isManual && btn) setTimeout(() => btn.classList.remove('spinning'), 500);
@@ -392,10 +430,8 @@
                 hero.querySelector('.big-status').innerText = 'All Systems Operational';
                 hero.querySelector('.status-desc').innerText = 'Encryption Engine & Database Active';
                 hero.querySelector('.big-status').style.color = 'var(--success-border)';
-
                 pingVal.innerText = latency + "ms";
                 pingVal.style.color = "var(--success-border)";
-
                 protoVal.innerText = protoStatus;
                 protoVal.style.color = "var(--success-border)";
             } else {
@@ -403,13 +439,10 @@
                 hero.querySelector('.big-status').innerText = 'System Outage Detected';
                 hero.querySelector('.status-desc').innerText = errorMsg; 
                 hero.querySelector('.big-status').style.color = 'var(--danger)';
-
                 pingVal.innerText = "TIMEOUT";
                 pingVal.style.color = "var(--danger)";
-                
                 protoVal.innerText = "FAILED";
                 protoVal.style.color = "var(--danger)";
-                
                 addLogEntry(now.toISOString(), protoStatus); 
             }
         }
@@ -423,7 +456,6 @@
 
             const recentData = data.slice(-48);
             const total = recentData.length;
-            
             const upCount = recentData.filter(x => x.status === 'up').length;
             const pct = total === 0 ? 100 : Math.round((upCount / total) * 100);
 
@@ -437,12 +469,17 @@
                 return `<div class="bar ${entry.status}" data-date="${dateStr}" data-status="${statusStr}"></div>`;
             }).join('');
 
+            // Fire tooltip bindings instantly when the graph elements render
+            setupTooltipListeners();
+
+            logContainer.parentElement.style.background = 'var(--surface)';
+            logContainer.style.maxHeight = '180px';
+            logContainer.style.overflowY = 'auto';
+
             const recentIncidents = recentData.filter(x => x.status === 'down').slice(-5);
-            
-            
-            if (recentIncidents.length === 0) logContainer.innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No recent incidents reported.</div>';
-            
-            if (recentIncidents.length > 0) {
+            if (recentIncidents.length === 0) {
+                logContainer.innerHTML = '<div class="log-item" style="color:var(--text-muted); justify-content:center;">No recent incidents reported.</div>';
+            } else {
                 logContainer.innerHTML = '';
                 recentIncidents.forEach(inc => addLogEntry(inc.time, "Confirmed Downtime"));
             }
@@ -456,7 +493,6 @@
             
             const d = new Date(time);
             const timeStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-            
             if(logContainer.innerHTML.includes(timeStr)) return;
 
             const div = document.createElement('div');
@@ -464,14 +500,13 @@
             div.innerHTML = `<span class="log-status down">${msg}</span><span class="log-time">${timeStr}</span>`;
             logContainer.prepend(div);
             
-            while (logContainer.children.length > 10) {
+            while (logContainer.children.length > 15) {
                 logContainer.removeChild(logContainer.lastChild);
             }
         }
 
         function manualRefresh() { runChecks(true); }
 
-        // Start immediately
         runChecks();
         setInterval(() => runChecks(false), 10000);
     </script>
