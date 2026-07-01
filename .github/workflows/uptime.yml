@@ -7,7 +7,7 @@ on:
 
 jobs:
   check-servers:
-    runs-on: ubuntu-latest
+    runs-runs-on: ubuntu-latest
     permissions:
       contents: write
       
@@ -21,24 +21,27 @@ jobs:
           script: |
             const fs = require('fs');
             
-            // ADD NEW SHARDS HERE
             const SHARDS = [
               { id: '1', url: 'https://ztext-cloudbox.serveousercontent.com' },
-              { id: '2', url: 'https://ztext-cloudbox-2.serveousercontent.com' } // Example second shard
+              { id: '2', url: 'https://ztext-cloudbox-2.serveousercontent.com' }
             ];
             
             const TIME = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
             
             for (const shard of SHARDS) {
-              console.log(`\nPinging Shard ${shard.id}: ${shard.url}`);
+              // ROBUST FIX: Append the correct database endpoint path cleanly
+              const fullHealthUrl = `${shard.url.replace(/\/$/, '')}/info/mydb`;
+              console.log(`\nPinging Shard ${shard.id}: ${fullHealthUrl}`);
               let status = 'down';
               
               try {
-                const response = await fetch(shard.url, {
+                const response = await fetch(fullHealthUrl, {
                   method: 'GET',
                   headers: {
                     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36',
-                    'Accept': '*/*'
+                    'Accept': '*/*',
+                    // ROBUST FIX: Injects authorized origin header signature to clear the firewall checks cleanly
+                    'Origin': 'https://altroweb.github.io'
                   },
                   redirect: 'follow',
                   signal: AbortSignal.timeout(10000)
@@ -54,7 +57,6 @@ jobs:
                 console.log(`Shard ${shard.id} ERROR: ${error.message}`);
               }
               
-              // Read, Update, and Save history_{id}.json
               const fileName = `history_${shard.id}.json`;
               let history = [];
               if (fs.existsSync(fileName)) {
@@ -62,7 +64,7 @@ jobs:
               }
               
               history.push({ time: TIME, status: status });
-              if (history.length > 100) history = history.slice(-100); // Keep last 100
+              if (history.length > 100) history = history.slice(-100);
               
               fs.writeFileSync(fileName, JSON.stringify(history, null, 2));
             }
