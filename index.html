@@ -28,9 +28,54 @@
 .container { width: 100%; max-width: 800px; padding: 20px 20px 80px 20px; }
         
         /* HEADER */
-        header { width: 100%; border-bottom: 1px solid var(--border); padding: 20px 0; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .brand { font-weight: 600; font-size: 18px; display: flex; align-items: center; gap: 10px; }
-        .header-controls { display: flex; align-items: center; gap: 15px; }
+        /* PRO ULTRA-RESPONSIVE HEADER DYNAMICS */
+header {
+    width: 100%;
+    border-bottom: 1px solid var(--border);
+    padding: 20px 0;
+    margin-bottom: 30px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* CRITICAL: Allows controls to drop below the logo cleanly on small viewports */
+    gap: 16px;       /* Safeguards layouts from colliding when stacking */
+    box-sizing: border-box;
+}
+
+.brand {
+    font-weight: 600;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-main);
+    white-space: nowrap; /* Stops your brand name from breaking into ugly half-words */
+}
+
+.brand svg {
+    flex-shrink: 0; /* Prevents browser engines from crushing the icon geometry */
+}
+
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap; /* Keeps badge and button safe on ultra-narrow systems */
+}
+
+/* SMART MOBILE HEADER BREAKPOINT */
+@media (max-width: 520px) {
+    header {
+        justify-content: center; /* Shifts to a balanced, centered stack layout on mobile devices */
+        padding: 16px 0;
+        margin-bottom: 20px;
+    }
+    
+    .header-controls {
+        width: 100%;
+        justify-content: center; /* Perfectly centers the action items directly underneath the brand logo */
+    }
+}
         
         .badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 500; border: 1px solid var(--border); }
         .badge.live { border-color: var(--success-border); color: var(--success-border); display: flex; align-items: center; gap: 6px; }
@@ -106,48 +151,65 @@
             gap: 15px; 
         }
 
-        /* NEW CENTERED SHARD WRAPPER */
-        .shard-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 25px;
-            padding: 10px 16px;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            width: fit-content;
-            margin-left: auto;
-            margin-right: auto;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-        }
+        /* ULTRA-RESPONSIVE SHARD WRAPPER */
+.shard-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap; /* CRITICAL: Allows components to stack vertically on tiny screens */
+    gap: 12px;
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    box-sizing: border-box;
+    text-align: left;
+}
 
-        /* PRO SHARD SELECTOR */
-        .shard-select {
-            background: var(--bg);
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            padding: 6px 30px 6px 12px; 
-            border-radius: 6px;
-            font-family: var(--font-ui);
-            font-size: 13px; 
-            font-weight: 500;
-            cursor: pointer;
-            outline: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 10px center;
-            background-size: 14px;
-            transition: all 0.2s;
-        }
+/* FLUID DROPDOWN WITH TEXT-WRAPPING DEFENSE */
+.shard-select {
+    flex: 1;
+    min-width: 0; /* CRITICAL: Breaks the default native HTML min-width block */
+    max-width: 280px;
+    background: var(--bg);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    padding: 8px 32px 8px 12px; 
+    border-radius: 6px;
+    font-family: var(--font-ui);
+    font-size: 13px; 
+    font-weight: 500;
+    cursor: pointer;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 14px;
+    
+    /* Text Truncation Safety */
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    
+    transition: all 0.2s;
+}
 
-        .shard-select:hover, .shard-select:focus { 
-            border-color: var(--text-muted); 
-        }
+.shard-select:hover, .shard-select:focus { 
+    border-color: var(--text-muted); 
+    background-color: #1c2128; 
+}
+
+/* SMART BREAKPOINT FOR MOBILE VIEWS */
+@media (max-width: 420px) {
+    .shard-select {
+        max-width: 100%; /* Stretches to full card width naturally when stacked */
+        flex-basis: 100%; /* Forces it onto a clean secondary row underneath the label */
+    }
+}
         
         
         
@@ -166,8 +228,51 @@
 }
 #incident-log::-webkit-scrollbar { width: 6px; }
 #incident-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+
+/* PRO URL CONTAINMENT & WRAPPING ENGINE */
+#shard-url {
+    word-break: break-all;       /* Forces long monolithic URLs to split exactly at the box edge */
+    overflow-wrap: break-word;   /* Standard cross-browser fallback behavior */
+    max-width: 100%;             /* Hard constraint to prevent width extrusion */
+    white-space: normal;         /* Explicitly breaks any inherited single-line text locks */
+    display: inline-block;       /* Correct layout model for text boundary restriction */
+    margin-top: 10px !important; /* Overrides structural spacing cleanly */
+    padding: 0 15px;             /* Micro breathing room on mobile viewports */
+    box-sizing: border-box;
+}
         
-        
+        /* MICRO-SCREEN OPTICAL CENTERING (SMARTWATCH / TINY VIEWPORTS) */
+@media (max-width: 240px) {
+    .status-banner {
+        padding: 20px 10px !important; /* Reclaims screen real estate so text has room to center */
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-align: center !important;
+    }
+
+    .big-status {
+        font-size: 18px !important; /* Downscales slightly so long status text doesn't break into awkward single characters */
+        line-height: 1.2 !important;
+        margin-bottom: 8px !important;
+        width: 100% !important;
+    }
+
+    .status-desc {
+        font-size: 11px !important;
+        line-height: 1.3 !important;
+        width: 100% !important;
+        display: block !important;
+    }
+    
+    .last-check {
+        margin-top: 10px !important;
+        width: 100% !important;
+        display: block !important;
+    }
+}
     </style>
 </head>
 <body>
